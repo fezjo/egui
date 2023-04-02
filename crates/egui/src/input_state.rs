@@ -8,7 +8,8 @@ pub use crate::data::input::Key;
 pub use touch_state::MultiTouchInfo;
 use touch_state::TouchState;
 
-/// If the pointer moves more than this, it won't become a click (but it is still a drag)
+/// This is used for distinguishing between single-click and drag and between double-click and two
+/// single clicks.
 const MAX_CLICK_DIST: f32 = 6.0; // TODO(emilk): move to settings
 
 /// If the pointer is down for longer than this, it won't become a click (but it is still a drag)
@@ -537,6 +538,10 @@ pub struct PointerState {
     /// for it to be registered as a click.
     pub(crate) has_moved_too_much_for_a_click: bool,
 
+    /// Where did the last click originate?
+    /// Used to check for double/triple-clicks
+    last_click_pos: Pos2,
+
     /// When did the pointer get click last?
     /// Used to check for double/triple-clicks
     last_click_time: f64,
@@ -562,6 +567,7 @@ impl Default for PointerState {
             press_origin: None,
             press_start_time: None,
             has_moved_too_much_for_a_click: false,
+            last_click_pos: Pos2::ZERO,
             last_click_time: std::f64::NEG_INFINITY,
             last_click_count: 0,
             pointer_events: vec![],
@@ -630,8 +636,14 @@ impl PointerState {
                         let clicked = self.could_any_button_be_click();
 
                         let click = if clicked {
+                            let chained = self.last_click_pos.distance(pos) <= MAX_CLICK_DIST;
+                            self.last_click_pos = pos;
                             self.last_click_time = time;
-                            self.last_click_count += 1;
+                            self.last_click_count = if chained {
+                                self.last_click_count + 1
+                            } else {
+                                1
+                            };
 
                             Some(Click {
                                 pos,
@@ -984,6 +996,7 @@ impl PointerState {
             press_origin,
             press_start_time,
             has_moved_too_much_for_a_click,
+            last_click_pos: _,
             last_click_time,
             last_click_count,
             pointer_events,
